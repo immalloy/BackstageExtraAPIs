@@ -1,7 +1,13 @@
 import { writeFile } from "node:fs/promises";
 
 const siteRoot = "https://funkinbackstage.net/";
-const pageResponse = await fetch(siteRoot, { cache: "no-store" });
+const requestOptions = {
+  cache: "no-store",
+  headers: {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  },
+};
+const pageResponse = await fetch(siteRoot, requestOptions);
 if (!pageResponse.ok) {
   throw new Error(`Site page returned ${pageResponse.status}`);
 }
@@ -13,7 +19,7 @@ if (!bundlePath) {
   throw new Error("Couldn't find the current site bundle.");
 }
 
-const bundleResponse = await fetch(new URL(bundlePath, siteRoot), { cache: "no-store" });
+const bundleResponse = await fetch(new URL(bundlePath, siteRoot), requestOptions);
 if (!bundleResponse.ok) {
   throw new Error(`Player bundle returned ${bundleResponse.status}`);
 }
