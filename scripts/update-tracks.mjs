@@ -4,12 +4,19 @@ const siteRoot = "https://funkinbackstage.net/";
 const requestOptions = {
   cache: "no-store",
   headers: {
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Upgrade-Insecure-Requests": "1",
   },
 };
 const pageResponse = await fetch(siteRoot, requestOptions);
 if (!pageResponse.ok) {
-  throw new Error(`Site page returned ${pageResponse.status}`);
+  const details = (await pageResponse.text()).slice(0, 300);
+  throw new Error(`Site page returned ${pageResponse.status}: ${details}`);
 }
 
 const page = await pageResponse.text();
