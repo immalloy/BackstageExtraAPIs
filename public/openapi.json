@@ -20,6 +20,10 @@
     {
       "name": "Discovery",
       "description": "Find information about this API."
+    },
+    {
+      "name": "Stickers",
+      "description": "Built-in and custom stickers available in chat."
     }
   ],
   "paths": {
@@ -39,7 +43,8 @@
                   "name": "Funkin' Backstage Extra API",
                   "endpoints": {
                     "tracks": "/api/tracks",
-                    "track": "/api/tracks/:id"
+                    "track": "/api/tracks/:id",
+                    "stickers": "/api/chat/stickers"
                   },
                   "source": "https://funkinbackstage.net"
                 }
@@ -95,6 +100,57 @@
           },
           "502": {
             "description": "The source song list could not be loaded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/stickers": {
+      "get": {
+        "tags": ["Stickers"],
+        "operationId": "listChatStickers",
+        "summary": "List chat stickers by category",
+        "description": "Returns the built-in and custom stickers available in the chat sticker picker, grouped by the same non-empty categories shown in its sticker tabs.",
+        "responses": {
+          "200": {
+            "description": "Sticker categories and their stickers",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StickerCatalog" },
+                "example": {
+                  "categoryCount": 1,
+                  "stickerCount": 2,
+                  "categories": [
+                    {
+                      "id": "fnf",
+                      "name": "FNF",
+                      "custom": false,
+                      "stickers": [
+                        {
+                          "name": "BFSticker",
+                          "group": "fnf",
+                          "url": "https://funkinbackstage.net/images/chat/stickers/BFSticker.png",
+                          "custom": false
+                        },
+                        {
+                          "name": "BFSHHH",
+                          "group": "fnf",
+                          "url": "https://funkinbackstage.net/images/chat/stickers/BFSHHH.png",
+                          "custom": false
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The chat sticker list could not be loaded.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
@@ -164,10 +220,11 @@
           "name": { "type": "string", "example": "Funkin' Backstage Extra API" },
           "endpoints": {
             "type": "object",
-            "required": ["tracks", "track"],
+            "required": ["tracks", "track", "stickers"],
             "properties": {
               "tracks": { "type": "string", "example": "/api/tracks" },
-              "track": { "type": "string", "example": "/api/tracks/:id" }
+              "track": { "type": "string", "example": "/api/tracks/:id" },
+              "stickers": { "type": "string", "example": "/api/chat/stickers" }
             }
           },
           "source": { "type": "string", "format": "uri", "example": "https://funkinbackstage.net" }
@@ -192,6 +249,41 @@
           "title": { "type": "string", "example": "Mic Check" },
           "artist": { "type": "string", "example": "Sumthemun" },
           "url": { "type": "string", "format": "uri", "description": "Direct MP3 URL from Funkin' Backstage.", "example": "https://funkinbackstage.net/music/Mic%20Check.mp3" }
+        }
+      },
+      "StickerCatalog": {
+        "type": "object",
+        "required": ["categoryCount", "stickerCount", "categories"],
+        "properties": {
+          "categoryCount": { "type": "integer", "minimum": 0 },
+          "stickerCount": { "type": "integer", "minimum": 0 },
+          "categories": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StickerCategory" }
+          }
+        }
+      },
+      "StickerCategory": {
+        "type": "object",
+        "required": ["id", "name", "custom", "stickers"],
+        "properties": {
+          "id": { "type": "string", "description": "Category key used by the chat picker." },
+          "name": { "type": "string", "description": "Category label shown in the sticker tabs." },
+          "custom": { "type": "boolean", "description": "Whether the category was added through the site's custom sticker data." },
+          "stickers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatSticker" }
+          }
+        }
+      },
+      "ChatSticker": {
+        "type": "object",
+        "required": ["name", "group", "url", "custom"],
+        "properties": {
+          "name": { "type": "string", "description": "Sticker name used by chat messages." },
+          "group": { "type": "string", "description": "Category key this sticker belongs to." },
+          "url": { "type": "string", "format": "uri", "description": "Image URL for this sticker." },
+          "custom": { "type": "boolean", "description": "Whether the sticker was added through the site's custom sticker data." }
         }
       },
       "Error": {

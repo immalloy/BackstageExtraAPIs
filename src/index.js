@@ -1,5 +1,6 @@
+import { loadBackstageStickers } from "./sources/backstage-stickers.js";
+
 const SITE_ORIGIN = "https://funkinbackstage.net";
-const CACHE_KEY_PATH = "/__worker_cache/backstage-tracks-v1";
 const CACHE_TTL_SECONDS = 60 * 60;
 
 const corsHeaders = {
@@ -34,6 +35,7 @@ export default {
         endpoints: {
           tracks: "/api/tracks",
           track: "/api/tracks/:id",
+          stickers: "/api/chat/stickers",
         },
         source: SITE_ORIGIN,
       });
@@ -72,6 +74,16 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/chat/stickers") {
+      try {
+        return json(await getCachedData(request, "stickers", loadBackstageStickers));
+      } catch (error) {
+        return json({ error: "Could not load the Backstage chat stickers", details: error.message }, 502, {
+          "Cache-Control": "no-store",
+        });
+      }
+    }
+
     if (url.pathname.startsWith("/api/")) {
       return json({ error: "Not found" }, 404);
     }
@@ -81,20 +93,24 @@ export default {
 };
 
 async function getTracks(request) {
+  return getCachedData(request, "tracks", scrapeTracks);
+}
+
+async function getCachedData(request, cacheName, loadData) {
   const cache = caches.default;
-  const cacheKey = new Request(new URL(CACHE_KEY_PATH, request.url));
+  const cacheKey = new Request(new URL(`/__worker_cache/${cacheName}-v1`, request.url));
   const cached = await cache.match(cacheKey);
   if (cached) return cached.json();
 
-  const tracks = await scrapeTracks();
-  const response = new Response(JSON.stringify(tracks), {
+  const data = await loadData();
+  const response = new Response(JSON.stringify(data), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}`,
     },
   });
   await cache.put(cacheKey, response.clone());
-  return tracks;
+  return data;
 }
 
 async function scrapeTracks() {

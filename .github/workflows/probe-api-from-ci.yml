@@ -1,0 +1,67 @@
+name: Probe Backstage API from GitHub Actions
+
+on:
+  workflow_dispatch:
+    inputs:
+      original_path:
+        description: Path on api.funkinbackstage.net to check
+        required: false
+        default: /site
+        type: string
+
+permissions: {}
+
+jobs:
+  probe:
+    name: Compare source and Worker access
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      ORIGINAL_PATH: ${{ inputs.original_path }}
+      ORIGINAL_URL: https://api.funkinbackstage.net
+      WORKER_URL: https://backstage-extra-api.lefehanims.workers.dev/api/chat/stickers
+    steps:
+      - name: Request the original API and Worker endpoint
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$ORIGINAL_PATH" ]]; then
+            ORIGINAL_PATH="/site"
+          fi
+          if [[ "$ORIGINAL_PATH" != /* || "$ORIGINAL_PATH" == //* ]]; then
+            echo "original_path must be a path beginning with one slash, such as /site" >&2
+            exit 2
+          fi
+          original_url="${ORIGINAL_URL}${ORIGINAL_PATH}"
+
+          set +e
+          original_status="$(curl --silent --show-error --location --connect-timeout 15 --max-time 30 --output /tmp/original-body --write-out '%{http_code}' "$original_url")"
+          original_curl_exit=$?
+          worker_status="$(curl --silent --show-error --location --connect-timeout 15 --max-time 30 --output /tmp/worker-body --write-out '%{http_code}' "$WORKER_URL")"
+          worker_curl_exit=$?
+          set -e
+
+          echo "Original API: ${original_url} (HTTP ${original_status:-000}, curl exit ${original_curl_exit})"
+          echo "Worker: ${WORKER_URL} (HTTP ${worker_status:-000}, curl exit ${worker_curl_exit})"
+          {
+            echo "## GitHub Actions API connectivity"
+            echo ""
+            echo "| Request | HTTP status | curl exit |"
+            echo "| --- | ---: | ---: |"
+            printf '| Original API: `%s` | %s | %s |\n' "$original_url" "${original_status:-000}" "$original_curl_exit"
+            printf '| Worker stickers: `%s` | %s | %s |\n' "$WORKER_URL" "${worker_status:-000}" "$worker_curl_exit"
+            echo ""
+            echo "A 403 from the original API is reported for comparison. The job only fails if the Worker is unreachable, non-200, or returns invalid sticker data."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$worker_curl_exit" -ne 0 || "$worker_status" != "200" ]]; then
+            echo "The Worker request failed from this GitHub-hosted runner." >&2
+            exit 1
+          fi
+          if ! jq -e '.categoryCount > 0 and .stickerCount > 0 and (.categories | type == "array")' /tmp/worker-body >/dev/null; then
+            echo "The Worker returned HTTP 200 but the sticker payload was invalid." >&2
+            exit 1
+          fi
+          echo "The Worker is reachable and returned categorized sticker data."
