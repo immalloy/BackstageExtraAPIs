@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#17131f" />
+    <meta name="description" content="Interactive OpenAPI reference for Backstage Extra API." />
+    <title>Backstage Extra API Reference</title>
+    <style>
+      body { margin: 0; background: #17131f; color: #f7f3fa; font: 15px/1.5 system-ui, sans-serif; }
+      #loading { box-sizing: border-box; max-width: 760px; margin: 14vh auto; padding: 28px; }
+      #loading h1 { margin-bottom: 8px; }
+      #loading p { color: #c2b9ca; }
+      #loading a { color: #dfb7ff; }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <section id="loading">
+        <h1>Backstage Extra API</h1>
+        <p>Loading the interactive API reference…</p>
+        <p>If the reference does not load, <a href="/openapi.json">open the OpenAPI document</a> directly.</p>
+      </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.78.0"></script>
+    <script>
+      Scalar.createApiReference("#app", {
+        url: "/openapi.json",
+        theme: "purple",
+        layout: "modern",
+        darkMode: true,
+        showSidebar: true,
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,208 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Backstage Extra API",
+    "version": "1.0.0",
+    "summary": "Community-made endpoints for Funkin' Backstage.",
+    "description": "Read the songs listed on Funkin' Backstage. The API is public, requires no key, and returns JSON. Track data is refreshed from the source site and cached at the edge for up to one hour."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Cloudflare Worker"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Tracks",
+      "description": "Songs listed by Funkin' Backstage."
+    },
+    {
+      "name": "Discovery",
+      "description": "Find information about this API."
+    }
+  ],
+  "paths": {
+    "/api": {
+      "get": {
+        "tags": ["Discovery"],
+        "operationId": "getApiIndex",
+        "summary": "List available routes",
+        "description": "Returns a machine-readable index of this API and its source site.",
+        "responses": {
+          "200": {
+            "description": "API index",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiIndex" },
+                "example": {
+                  "name": "Funkin' Backstage Extra API",
+                  "endpoints": {
+                    "tracks": "/api/tracks",
+                    "track": "/api/tracks/:id"
+                  },
+                  "source": "https://funkinbackstage.net"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tracks": {
+      "get": {
+        "tags": ["Tracks"],
+        "operationId": "listTracks",
+        "summary": "List and search songs",
+        "description": "Returns all songs, optionally filtered by a case-insensitive substring in the title and artist.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search the title and artist fields.",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "mic"
+          },
+          {
+            "name": "artist",
+            "in": "query",
+            "description": "Filter by a case-insensitive substring of the artist name.",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "sum"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching tracks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TrackList" },
+                "example": {
+                  "count": 1,
+                  "tracks": [
+                    {
+                      "id": "mic-check",
+                      "title": "Mic Check",
+                      "artist": "Sumthemun",
+                      "url": "https://funkinbackstage.net/music/Mic%20Check.mp3"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The source song list could not be loaded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tracks/{id}": {
+      "get": {
+        "tags": ["Tracks"],
+        "operationId": "getTrack",
+        "summary": "Get one song",
+        "description": "Returns the track whose ID matches the slug in the song list.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Track slug, such as `mic-check`.",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "mic-check"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Track details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Track" },
+                "example": {
+                  "id": "mic-check",
+                  "title": "Mic Check",
+                  "artist": "Sumthemun",
+                  "url": "https://funkinbackstage.net/music/Mic%20Check.mp3"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The track ID has invalid URL encoding.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": {
+            "description": "No track has this ID.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiIndex": {
+        "type": "object",
+        "required": ["name", "endpoints", "source"],
+        "properties": {
+          "name": { "type": "string", "example": "Funkin' Backstage Extra API" },
+          "endpoints": {
+            "type": "object",
+            "required": ["tracks", "track"],
+            "properties": {
+              "tracks": { "type": "string", "example": "/api/tracks" },
+              "track": { "type": "string", "example": "/api/tracks/:id" }
+            }
+          },
+          "source": { "type": "string", "format": "uri", "example": "https://funkinbackstage.net" }
+        }
+      },
+      "TrackList": {
+        "type": "object",
+        "required": ["count", "tracks"],
+        "properties": {
+          "count": { "type": "integer", "minimum": 0, "description": "Number of matching tracks." },
+          "tracks": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Track" }
+          }
+        }
+      },
+      "Track": {
+        "type": "object",
+        "required": ["id", "title", "artist", "url"],
+        "properties": {
+          "id": { "type": "string", "description": "URL-friendly slug derived from the title.", "example": "mic-check" },
+          "title": { "type": "string", "example": "Mic Check" },
+          "artist": { "type": "string", "example": "Sumthemun" },
+          "url": { "type": "string", "format": "uri", "description": "Direct MP3 URL from Funkin' Backstage.", "example": "https://funkinbackstage.net/music/Mic%20Check.mp3" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string" },
+          "details": { "type": "string" },
+          "id": { "type": "string" }
+        }
+      }
+    }
+  }
+}
