@@ -1,0 +1,108 @@
+name: Temporary Backstage API diagnostic
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe the Backstage API
+        shell: bash
+        run: |
+          set +e
+          url='https://api.funkinbackstage.net/mods?page=1&limit=1'
+          workdir="$(mktemp -d)"
+
+          print_result() {
+            local name="$1"
+            local status="$2"
+            local headers="$3"
+            local body="$4"
+
+            echo
+            echo "========== $name =========="
+            if [[ "$status" == "200" ]]; then
+              echo "Result: HTTP 200 (OK)"
+            elif [[ "$status" == "403" ]]; then
+              echo "Result: HTTP 403 (Forbidden)"
+            elif [[ "$status" =~ ^[0-9]{3}$ ]]; then
+              echo "Result: HTTP $status (another status)"
+            else
+              echo "Result: request failed before an HTTP status was received ($status)"
+            fi
+            echo "Response headers:"
+            if [[ -s "$headers" ]]; then
+              cat "$headers"
+            else
+              echo "(none received)"
+            fi
+            echo "Useful headers (if present):"
+            if [[ -s "$headers" ]]; then
+              grep -iE '^(cf-ray|cf-mitigated|access-control-allow-origin|content-type):' "$headers" || echo "(none found)"
+            else
+              echo "(none found)"
+            fi
+            echo "Response body (first 4096 bytes):"
+            if [[ -f "$body" ]]; then
+              head -c 4096 "$body"
+              [[ $(wc -c < "$body") -gt 4096 ]] && echo "\n...[truncated]..."
+              echo
+            else
+              echo "(none received)"
+            fi
+          }
+
+          curl_probe() {
+            local name="$1"
+            local headers_file="$2"
+            local body_file="$3"
+            shift 3
+            local status
+            status=$(curl --silent --show-error --max-time 30 --dump-header "$headers_file" --output "$body_file" --write-out '%{http_code}' "$@" "$url" 2>"$workdir/curl-error")
+            local curl_rc=$?
+            if [[ $curl_rc -ne 0 ]]; then
+              echo "curl error: $(cat "$workdir/curl-error")"
+              [[ -z "$status" || "$status" == "000" ]] && status="curl error (exit $curl_rc)"
+            fi
+            print_result "$name" "$status" "$headers_file" "$body_file"
+            printf '%s' "$status"
+          }
+
+          status_no_origin=$(curl_probe 'curl: no Origin header' "$workdir/curl-no-origin.headers" "$workdir/curl-no-origin.body")
+          status_funkin_origin=$(curl_probe 'curl: Origin https://funkinbackstage.net' "$workdir/curl-funkin-origin.headers" "$workdir/curl-funkin-origin.body" --header 'Origin: https://funkinbackstage.net')
+          status_docs_origin=$(curl_probe 'curl: Origin https://backstageapi-docs.pages.dev' "$workdir/curl-docs-origin.headers" "$workdir/curl-docs-origin.body" --header 'Origin: https://backstageapi-docs.pages.dev')
+
+          echo
+          echo '========== Node.js fetch: no Origin header =========='
+          status_node=$(node --input-type=module - "$url" "$workdir/node.headers" "$workdir/node.body" <<'NODE'
+          const [url, headersPath, bodyPath] = process.argv.slice(2);
+          import { writeFile } from 'node:fs/promises';
+          try {
+            const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+            const body = await response.text();
+            const headers = [...response.headers].map(([key, value]) => `${key}: ${value}`).join('\n');
+            await writeFile(headersPath, headers ? `${headers}\n` : '');
+            await writeFile(bodyPath, body);
+            console.log(response.status);
+          } catch (error) {
+            await writeFile(headersPath, '');
+            await writeFile(bodyPath, '');
+            console.log(`fetch error (${error?.name ?? 'Error'}: ${error?.message ?? error})`);
+          }
+          NODE
+          )
+          [[ -z "$status_node" ]] && status_node='fetch error / status unavailable'
+          print_result 'Node.js fetch: no Origin header' "$status_node" "$workdir/node.headers" "$workdir/node.body"
+
+          echo
+          echo '========== Diagnostic summary =========='
+          printf 'curl without Origin: %s\n' "$status_no_origin"
+          printf 'curl with funkinbackstage.net Origin: %s\n' "$status_funkin_origin"
+          printf 'curl with backstageapi-docs.pages.dev Origin: %s\n' "$status_docs_origin"
+          printf 'Node.js fetch without Origin: %s\n' "$status_node"
+          echo 'Compare these statuses and the cf-mitigated/cf-ray headers to see whether behavior changes by client or Origin.'
